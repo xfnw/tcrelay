@@ -1,8 +1,8 @@
 use clap::Parser;
-use http_body_util::Full;
+use http_body_util::{combinators::BoxBody, BodyExt, Full, StreamBody};
 use hyper::{body::Bytes, server::conn::http1, service::service_fn, Request, Response};
 use hyper_util::rt::TokioIo;
-use std::{error::Error, net::SocketAddr, sync::Arc};
+use std::{convert::Infallible, error::Error, net::SocketAddr, sync::Arc};
 use tokio::{net::TcpListener, sync::RwLock};
 
 pub mod bloom;
@@ -21,14 +21,14 @@ async fn handle_conn(
     req: Request<hyper::body::Incoming>,
     mirrors: Arc<Vec<String>>,
     filter: Arc<RwLock<[u8; 8192]>>,
-) -> Result<Response<Full<Bytes>>, Box<dyn Error + Send + Sync>> {
+) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
     let uri = req.uri().path().as_bytes();
     let mut res = "i have been requested this before";
     if !bloom::check(&*filter.read().await, uri) {
         res = "wazzat?";
         bloom::add(&mut *filter.write().await, uri);
     };
-    Ok(Response::new(Full::new(Bytes::from(res))))
+    Ok(Response::new(Full::new(Bytes::from(res)).boxed()))
 }
 
 #[tokio::main]
