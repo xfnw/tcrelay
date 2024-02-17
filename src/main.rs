@@ -2,12 +2,8 @@ use clap::Parser;
 use http_body_util::Full;
 use hyper::{body::Bytes, server::conn::http1, service::service_fn, Request, Response};
 use hyper_util::rt::TokioIo;
-use std::{
-    error::Error,
-    net::SocketAddr,
-    sync::{Arc, RwLock},
-};
-use tokio::net::TcpListener;
+use std::{error::Error, net::SocketAddr, sync::Arc};
+use tokio::{net::TcpListener, sync::RwLock};
 
 pub mod bloom;
 
@@ -22,10 +18,17 @@ struct Opt {
 }
 
 async fn handle_conn(
-    _: Request<hyper::body::Incoming>,
+    req: Request<hyper::body::Incoming>,
     mirrors: Arc<Vec<String>>,
-) -> Result<Response<Full<Bytes>>, hyper::Error> {
-    Ok(Response::new(Full::new(Bytes::from(mirrors[0].clone()))))
+    filter: Arc<RwLock<[u8; 8192]>>,
+) -> Result<Response<Full<Bytes>>, Box<dyn Error + Send + Sync>> {
+    let uri = req.uri().path().as_bytes();
+    let mut res = "i have been requested this before";
+    if !bloom::check(&*filter.read().await, uri) {
+        res = "wazzat?";
+        bloom::add(&mut *filter.write().await, uri);
+    };
+    Ok(Response::new(Full::new(Bytes::from(res))))
 }
 
 #[tokio::main]
@@ -37,14 +40,17 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     eprintln!("listening on {}", opt.bindhost);
 
     let mirrors = Arc::new(opt.mirrors);
+    let filter = Arc::new(RwLock::new([0 as u8; 8192]));
 
     loop {
         let (stream, _) = listen.accept().await?;
         let io = TokioIo::new(stream);
 
         let mirrors = Arc::clone(&mirrors);
+        let filter = Arc::clone(&filter);
 
-        let service = service_fn(move |req| handle_conn(req, Arc::clone(&mirrors)));
+        let service =
+            service_fn(move |req| handle_conn(req, Arc::clone(&mirrors), Arc::clone(&filter)));
 
         tokio::task::spawn(async move {
             if let Err(e) = http1::Builder::new().serve_connection(io, service).await {
