@@ -52,7 +52,7 @@ mod tests {
 
     #[test]
     fn added() {
-        let mut filter = [0 as u8; 8192];
+        let mut filter = [0_u8; 8192];
         add(&mut filter, b"yip");
         add(&mut filter, b"yap");
         add(&mut filter, b"yop");
@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn all_ones() {
-        let filter = [255 as u8; 8192];
+        let filter = [255_u8; 8192];
 
         assert!(check(&filter, b"beep"));
         assert!(check(&filter, b"boop"));

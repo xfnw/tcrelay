@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     eprintln!("listening on {}", opt.bindhost);
 
     let mirrors = Arc::new(opt.mirrors);
-    let filter = Arc::new(RwLock::new([0 as u8; 8192]));
+    let filter = Arc::new(RwLock::new([0_u8; 8192]));
 
     loop {
         let (stream, _) = listen.accept().await?;
