@@ -54,7 +54,7 @@ pub async fn get_request(
         .expect("got host but not authority? what")
         .clone();
     let req = Request::builder()
-        .uri(uri)
+        .uri(uri.path())
         .header(hyper::header::HOST, addr.as_str())
         .body(Empty::<Bytes>::new())?;
 

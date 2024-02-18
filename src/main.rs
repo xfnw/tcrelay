@@ -2,7 +2,7 @@ use clap::Parser;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::{body::Bytes, server::conn::http1, service::service_fn, Request, Response};
 use hyper_util::rt::TokioIo;
-use std::{convert::Infallible, error::Error, net::SocketAddr, sync::Arc};
+use std::{error::Error, net::SocketAddr, sync::Arc};
 use tokio::{net::TcpListener, sync::RwLock};
 
 pub mod bloom;
@@ -18,18 +18,26 @@ struct Opt {
     mirrors: Vec<String>,
 }
 
+fn not_found() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
+    Response::builder()
+        .status(hyper::StatusCode::NOT_FOUND)
+        .body(
+            Full::new(Bytes::from("knot found\n"))
+                .map_err(|e| match e {})
+                .boxed(),
+        )
+}
+
 async fn handle_conn(
     req: Request<hyper::body::Incoming>,
-    _mirrors: Arc<Vec<String>>,
-    filter: Arc<RwLock<[u8; 8192]>>,
-) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
-    let uri = req.uri().path().as_bytes();
-    let mut res = "i have been requested this before";
-    if !bloom::check(&*filter.read().await, uri) {
-        res = "wazzat?";
-        bloom::add(&mut *filter.write().await, uri);
-    };
-    Ok(Response::new(Full::new(Bytes::from(res)).boxed()))
+    mirrors: Arc<Vec<String>>,
+    _filter: Arc<RwLock<[u8; 8192]>>,
+) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
+    let uri = req.uri().path();
+    match hclient::try_get(&mirrors, uri).await {
+        Some(data) => Ok(Response::new(data.into_body().boxed())),
+        None => not_found(),
+    }
 }
 
 #[tokio::main]
