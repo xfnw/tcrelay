@@ -8,23 +8,27 @@ pub async fn try_get(mirrors: &[String], path: &str) -> Option<Response<hyper::b
         let url = format!("{}{}", m, path);
         let uri = match url.parse() {
             Ok(u) => u,
-            Err(e) => {
-                eprintln!("failed to parse {}: {:?}", url, e);
+            Err(_e) => {
+                #[cfg(feature = "log")]
+                eprintln!("failed to parse {}: {:?}", url, _e);
                 continue;
             }
         };
         match get_request(uri).await {
             Ok(r) => {
                 if !r.status().is_success() {
+                    #[cfg(feature = "log")]
                     eprintln!("got {} status from {}", r.status().as_str(), url);
                     continue;
                 }
 
+                #[cfg(feature = "log")]
                 eprintln!("got {}", url);
                 return Some(r);
             }
-            Err(e) => {
-                eprintln!("failed to get {}: {:?}", url, e);
+            Err(_e) => {
+                #[cfg(feature = "log")]
+                eprintln!("failed to get {}: {:?}", url, _e);
                 continue;
             }
         };
@@ -44,8 +48,9 @@ pub async fn get_request(
     let (mut sender, conn) = hyper::client::conn::http1::handshake(io).await?;
 
     tokio::task::spawn(async move {
-        if let Err(e) = conn.await {
-            eprintln!("connection failed: {:?}", e);
+        if let Err(_e) = conn.await {
+            #[cfg(feature = "log")]
+            eprintln!("connection failed: {:?}", _e);
         }
     });
 
