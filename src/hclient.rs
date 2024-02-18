@@ -18,7 +18,7 @@ pub async fn try_get(mirrors: &[String], path: &str) -> Option<Response<hyper::b
             Ok(r) => {
                 if !r.status().is_success() {
                     #[cfg(feature = "log")]
-                    eprintln!("got {} status from {}", r.status().as_str(), url);
+                    eprintln!("{} from {}", r.status().as_str(), url);
                     continue;
                 }
 
