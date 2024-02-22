@@ -6,6 +6,7 @@ use std::{error::Error, net::SocketAddr, sync::Arc};
 use tokio::{net::TcpListener, sync::RwLock};
 
 pub mod bloom;
+pub mod cache;
 pub mod hclient;
 
 #[derive(Debug, Parser)]
@@ -31,11 +32,34 @@ fn not_found() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Er
 async fn handle_conn(
     req: Request<hyper::body::Incoming>,
     mirrors: Arc<Vec<String>>,
-    _filter: Arc<RwLock<[u8; 8192]>>,
+    filter: Arc<RwLock<[u8; 8192]>>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
     let uri = req.uri().path();
+    let uri_bytes = uri.as_bytes();
+    let seen = bloom::check(&*filter.read().await, uri.as_bytes());
+
+    if seen {
+        if let Some(_) = None::<Bytes> {
+            // TODO: try to get from cache
+        }
+    }
+
     match hclient::try_get(&mirrors, uri).await {
-        Some(data) => Ok(Response::new(data.into_body().boxed())),
+        Some(data) => {
+            let obody = data.into_body();
+            let body = match seen {
+                true => {
+                    // TODO: try caching
+                    obody.boxed()
+                }
+                false => {
+                    bloom::add(&mut *filter.write().await, uri_bytes);
+                    obody.boxed()
+                }
+            };
+
+            Ok(Response::new(body))
+        }
         None => not_found(),
     }
 }
