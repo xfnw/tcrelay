@@ -33,14 +33,19 @@ async fn handle_conn(
     req: Request<hyper::body::Incoming>,
     mirrors: Arc<Vec<String>>,
     filter: Arc<RwLock<[u8; 8192]>>,
+    cachestore: cache::CacheStore,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
     let uri = req.uri().path();
     let uri_bytes = uri.as_bytes();
     let seen = bloom::check(&*filter.read().await, uri.as_bytes());
 
     if seen {
-        if let Some(_) = None::<Bytes> {
-            // TODO: try to get from cache
+        if let Some(data) = cachestore.read().await.get(uri) {
+            return Ok(Response::new(
+                Full::new(Bytes::clone(data))
+                    .map_err(|e| match e {})
+                    .boxed(),
+            ));
         }
     }
 
@@ -52,6 +57,8 @@ async fn handle_conn(
                     let sbody = cache::FanoutBody {
                         body: obody,
                         uri: uri.to_string(),
+                        buffer: Vec::new(),
+                        cachestore,
                     };
                     sbody.boxed()
                 }
@@ -77,6 +84,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let mirrors = Arc::new(opt.mirrors);
     let filter = Arc::new(RwLock::new([0_u8; 8192]));
+    let cachestore: cache::CacheStore = Arc::new(RwLock::new(std::collections::BTreeMap::new()));
 
     loop {
         let (stream, _) = listen.accept().await?;
@@ -84,9 +92,16 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
         let mirrors = Arc::clone(&mirrors);
         let filter = Arc::clone(&filter);
+        let cachestore = Arc::clone(&cachestore);
 
-        let service =
-            service_fn(move |req| handle_conn(req, Arc::clone(&mirrors), Arc::clone(&filter)));
+        let service = service_fn(move |req| {
+            handle_conn(
+                req,
+                Arc::clone(&mirrors),
+                Arc::clone(&filter),
+                Arc::clone(&cachestore),
+            )
+        });
 
         tokio::task::spawn(async move {
             if let Err(e) = http1::Builder::new().serve_connection(io, service).await {
