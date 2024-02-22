@@ -23,7 +23,7 @@ fn not_found() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Er
     Response::builder()
         .status(hyper::StatusCode::NOT_FOUND)
         .body(
-            Full::new(Bytes::from("knot found\n"))
+            Full::new(Bytes::from_static(b"knot found\n"))
                 .map_err(|e| match e {})
                 .boxed(),
         )
