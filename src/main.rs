@@ -49,8 +49,11 @@ async fn handle_conn(
             let obody = data.into_body();
             let body = match seen {
                 true => {
-                    // TODO: try caching
-                    obody.boxed()
+                    let sbody = cache::FanoutBody {
+                        body: obody,
+                        uri: uri.to_string(),
+                    };
+                    sbody.boxed()
                 }
                 false => {
                     bloom::add(&mut *filter.write().await, uri_bytes);
