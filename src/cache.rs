@@ -1,5 +1,9 @@
-use hyper::body::{Body, Bytes, Frame};
+use hyper::{
+    body::{Body, Bytes, Frame},
+    Error,
+};
 use std::{
+    marker::Unpin,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -8,14 +12,14 @@ use tokio::{runtime::Handle, sync::RwLock};
 
 pub type CacheStore = Arc<RwLock<std::collections::BTreeMap<String, Bytes>>>;
 
-pub struct FanoutBody {
-    pub body: hyper::body::Incoming,
+pub struct FanoutBody<T: Body + Unpin> {
+    pub body: T,
     pub uri: String,
     pub buffer: Vec<u8>,
     pub cachestore: CacheStore,
 }
 
-impl FanoutBody {
+impl<T: Body + Unpin> FanoutBody<T> {
     fn done(mut self: Pin<&mut Self>) {
         let uri = self.uri.clone();
         let cachestore = Arc::clone(&self.cachestore);
@@ -37,9 +41,9 @@ impl FanoutBody {
     }
 }
 
-impl Body for FanoutBody {
+impl<T: Body<Data = Bytes, Error = Error> + Unpin> Body for FanoutBody<T> {
     type Data = Bytes;
-    type Error = hyper::Error;
+    type Error = Error;
 
     fn poll_frame(
         mut self: Pin<&mut Self>,
