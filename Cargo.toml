@@ -14,3 +14,6 @@ tokio = { version = "1.36.0", features = ["rt-multi-thread", "tokio-macros", "ma
 
 [features]
 log = []
+
+[dev-dependencies]
+futures = { version = "0.3.30", default-features = false }
