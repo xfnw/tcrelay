@@ -1,5 +1,5 @@
 use hyper::{
-    body::{Body, Bytes, Frame},
+    body::{Body, Bytes, Frame, SizeHint},
     Error,
 };
 use std::{
@@ -25,6 +25,10 @@ pub struct FanoutBody<T: Body + Unpin> {
 
 impl<T: Body + Unpin> FanoutBody<T> {
     fn done(mut self: Pin<&mut Self>) {
+        if self.buffer.is_empty() {
+            return;
+        }
+
         let uri = self.uri.clone();
         let cachestore = Arc::clone(&self.cachestore);
 
@@ -59,12 +63,25 @@ impl<T: Body<Data = Bytes, Error = Error> + Unpin> Body for FanoutBody<T> {
                 if let Some(data) = frame.data_ref() {
                     self.buffer.append(&mut data.to_vec());
                 }
+                if self.is_end_stream() {
+                    self.done()
+                }
             }
             Poll::Ready(None) => self.done(),
             _ => (),
         };
 
         res
+    }
+
+    #[inline]
+    fn is_end_stream(&self) -> bool {
+        self.body.is_end_stream()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> SizeHint {
+        self.body.size_hint()
     }
 }
 
@@ -89,7 +106,7 @@ mod tests {
         // FIXME: replace with std::task::Waker::noop once stable
         // https://github.com/rust-lang/rust/issues/98286
         let waker = futures::task::noop_waker_ref();
-        let mut cx = std::task::Context::from_waker(&waker);
+        let mut cx = std::task::Context::from_waker(waker);
         let mut pinned = std::pin::pin!(body);
 
         let pf = pinned.as_mut().poll_frame(&mut cx);
@@ -99,14 +116,19 @@ mod tests {
         };
         assert_eq!(read, &Bytes::from_static(b"you wouldn't download a fox"));
 
+        // wait for FanoutBody to finish caching in the background
+        tokio::task::yield_now().await;
+        let res = cachestore.read().await;
+        let res = res.get("/test").unwrap();
+        assert_eq!(res, &Bytes::from_static(b"you wouldn't download a fox"));
+
         match pinned.as_mut().poll_frame(&mut cx) {
             Poll::Ready(None) => (),
             e => panic!("failed to poll frame: {:?}", e),
         };
 
-        // wait for FanoutBody to finish caching in the background
+        // make sure extra polling does not mess up the cache
         tokio::task::yield_now().await;
-
         let res = cachestore.read().await;
         let res = res.get("/test").unwrap();
         assert_eq!(res, &Bytes::from_static(b"you wouldn't download a fox"));
