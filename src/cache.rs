@@ -12,6 +12,10 @@ use tokio::{runtime::Handle, sync::RwLock};
 
 pub type CacheStore = Arc<RwLock<std::collections::BTreeMap<String, Bytes>>>;
 
+pub fn new_store() -> CacheStore {
+    Arc::new(RwLock::new(std::collections::BTreeMap::new()))
+}
+
 pub struct FanoutBody<T: Body + Unpin> {
     pub body: T,
     pub uri: String,
@@ -74,7 +78,7 @@ mod tests {
     async fn cache_static() {
         let inp =
             Full::new(Bytes::from_static(b"you wouldn't download a fox")).map_err(|e| match e {});
-        let cachestore: CacheStore = Arc::new(RwLock::new(std::collections::BTreeMap::new()));
+        let cachestore = new_store();
         let body = FanoutBody {
             body: inp,
             uri: "/test".to_string(),

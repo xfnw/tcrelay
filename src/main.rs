@@ -84,7 +84,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let mirrors = Arc::new(opt.mirrors);
     let filter = Arc::new(RwLock::new([0_u8; 8192]));
-    let cachestore: cache::CacheStore = Arc::new(RwLock::new(std::collections::BTreeMap::new()));
+    let cachestore = cache::new_store();
 
     loop {
         let (stream, _) = listen.accept().await?;
