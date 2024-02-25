@@ -57,10 +57,10 @@ pub async fn get_request(
     let addr = uri
         .authority()
         .expect("got host but not authority? what")
-        .clone();
+        .as_str();
     let req = Request::builder()
         .uri(uri.path())
-        .header(hyper::header::HOST, addr.as_str())
+        .header(hyper::header::HOST, addr)
         .body(Empty::<Bytes>::new())?;
 
     Ok(sender.send_request(req).await?)
