@@ -30,7 +30,7 @@ fn not_found() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Er
 }
 
 async fn handle_conn(
-    req: Request<hyper::body::Incoming>,
+    req: Request<impl hyper::body::Body>,
     mirrors: Arc<Vec<String>>,
     filter: Arc<RwLock<[u8; 8192]>>,
     cachestore: cache::CacheStore,
@@ -108,5 +108,37 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 eprintln!("oh no {:?}", e);
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+
+    #[test]
+    fn verify_clap() {
+        use clap::CommandFactory;
+        Opt::command().debug_assert();
+    }
+
+    #[tokio::test]
+    async fn no_mirrors() {
+        use http_body_util::Empty;
+
+        let mirrors = Arc::new(vec![]);
+        let filter = Arc::new(RwLock::new([0_u8; 8192]));
+        let cachestore = cache::new_store();
+
+        let req = Request::builder()
+            .uri("/meow")
+            .body(Empty::<Bytes>::new())
+            .unwrap();
+
+        let res = handle_conn(req, mirrors, filter, cachestore).await.unwrap();
+
+        // FIXME: comparing Debug is probably a bad idea,
+        // but BoxBody does not implement Eq, so...
+        let res = format!("{:?}", res);
+        assert_eq!(res, format!("{:?}", not_found().unwrap()));
     }
 }
