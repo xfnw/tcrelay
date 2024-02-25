@@ -77,4 +77,20 @@ mod tests {
         let res = get_request(url.parse().unwrap()).await.unwrap();
         assert!(res.status().is_success());
     }
+
+    #[tokio::test]
+    #[ignore]
+    async fn get_fallback() {
+        let mirrors = [
+            "http://deb.debian.org",    // should 404
+            "http://github.com:443",    // should get nonsense
+            "http://owo: whats this!",  // should be unparseable
+            "http://tinycorelinux.net", // should actually get
+        ]
+        .map(|m| m.to_string());
+        let res = try_get(&mirrors, "/10.x/x86/tcz/sed.tcz.md5.txt")
+            .await
+            .unwrap();
+        assert_eq!(res.headers().get("content-length").unwrap(), "42");
+    }
 }
