@@ -80,7 +80,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let listen = TcpListener::bind(opt.bindhost).await?;
 
-    eprintln!("listening on {}", opt.bindhost);
+    eprintln!("listening on {}", listen.local_addr()?);
 
     let mirrors = Arc::new(opt.mirrors);
     let filter = Arc::new(RwLock::new([0_u8; 8192]));
