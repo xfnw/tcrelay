@@ -36,6 +36,19 @@ async fn handle_conn(
     cachestore: Arc<cache::CacheStore>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
     let uri = req.uri().path();
+
+    if req.method() == hyper::Method::DELETE {
+        return if cachestore.remove(uri).await.is_some() {
+            Ok(Response::new(
+                Full::new(Bytes::from_static(b"nom nom\n"))
+                    .map_err(|e| match e {})
+                    .boxed(),
+            ))
+        } else {
+            not_found()
+        };
+    }
+
     let uri_bytes = uri.as_bytes();
     let seen = bloom::check(&*filter.read().await, uri.as_bytes());
 

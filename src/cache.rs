@@ -27,7 +27,20 @@ impl CacheStore {
     }
 
     pub async fn insert(&self, uri: String, content: Bytes) {
+        #[cfg(feature = "log")]
+        eprintln!("cached {} using {} B", uri, content.len());
+
         self.store.write().await.insert(uri, content);
+    }
+
+    pub async fn remove(&self, uri: &str) -> Option<Bytes> {
+        if let Some(content) = self.store.write().await.remove(uri) {
+            #[cfg(feature = "log")]
+            eprintln!("removed {} freeing {} B", uri, content.len());
+
+            return Some(content);
+        }
+        None
     }
 }
 
@@ -56,9 +69,6 @@ impl<T: Body + Unpin> FanoutBody<T> {
         // nab the runtime and become one anyways >:3
         let _ = Handle::current().enter();
         tokio::task::spawn(async move {
-            #[cfg(feature = "log")]
-            eprintln!("cached {} using {} B", uri, content.len());
-
             cachestore.insert(uri, content.into()).await;
         });
     }
@@ -134,7 +144,7 @@ mod tests {
         // wait for FanoutBody to finish caching in the background
         tokio::task::yield_now().await;
         let res = cachestore.get("/test").await.unwrap();
-        assert_eq!(res, &Bytes::from_static(b"you wouldn't download a fox"));
+        assert_eq!(res, Bytes::from_static(b"you wouldn't download a fox"));
 
         match pinned.as_mut().poll_frame(&mut cx) {
             Poll::Ready(None) => (),
@@ -144,6 +154,9 @@ mod tests {
         // make sure extra polling does not mess up the cache
         tokio::task::yield_now().await;
         let res = cachestore.get("/test").await.unwrap();
-        assert_eq!(res, &Bytes::from_static(b"you wouldn't download a fox"));
+        assert_eq!(res, Bytes::from_static(b"you wouldn't download a fox"));
+
+        let res = cachestore.remove("/test").await.unwrap();
+        assert_eq!(res, Bytes::from_static(b"you wouldn't download a fox"));
     }
 }
