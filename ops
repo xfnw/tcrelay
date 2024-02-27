@@ -1,1 +1,1 @@
-{"author":{"id":"74515061d9c62bd1750a1455b6b6e5b33c763d2ad3122f8115cf56b631c9a111"},"ops":[{"type":3,"timestamp":1709058807,"nonce":"8bjGgZZZJCuWqMbh7/yoeOeQP3k=","message":"added http DELETE handing in r26.38a597b\n\ni still think automatically cleaning up the cache would be worth pursuing though","files":null}]}
+{"author":{"id":"74515061d9c62bd1750a1455b6b6e5b33c763d2ad3122f8115cf56b631c9a111"},"ops":[{"type":2,"timestamp":1709059861,"nonce":"1g6Zl3tecmGQLB4uglMfv1AANuA=","title":"automatically clean up cache","was":"allow freeing old cache entries"}]}
