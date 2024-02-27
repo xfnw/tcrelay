@@ -33,18 +33,16 @@ async fn handle_conn(
     req: Request<impl hyper::body::Body>,
     mirrors: Arc<Vec<String>>,
     filter: Arc<RwLock<[u8; 8192]>>,
-    cachestore: cache::CacheStore,
+    cachestore: Arc<cache::CacheStore>,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
     let uri = req.uri().path();
     let uri_bytes = uri.as_bytes();
     let seen = bloom::check(&*filter.read().await, uri.as_bytes());
 
     if seen {
-        if let Some(data) = cachestore.read().await.get(uri) {
+        if let Some(data) = cachestore.get(uri).await {
             return Ok(Response::new(
-                Full::new(Bytes::clone(data))
-                    .map_err(|e| match e {})
-                    .boxed(),
+                Full::new(data).map_err(|e| match e {}).boxed(),
             ));
         }
     }
@@ -84,7 +82,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let mirrors = Arc::new(opt.mirrors);
     let filter = Arc::new(RwLock::new([0_u8; 8192]));
-    let cachestore = cache::new_store();
+    let cachestore = cache::CacheStore::new();
 
     loop {
         let (stream, _) = listen.accept().await?;
@@ -127,7 +125,7 @@ mod tests {
 
         let mirrors = Arc::new(vec![]);
         let filter = Arc::new(RwLock::new([0_u8; 8192]));
-        let cachestore = cache::new_store();
+        let cachestore = cache::CacheStore::new();
 
         let req = Request::builder()
             .uri("/meow")

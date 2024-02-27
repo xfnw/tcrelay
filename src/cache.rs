@@ -10,17 +10,32 @@ use std::{
 };
 use tokio::{runtime::Handle, sync::RwLock};
 
-pub type CacheStore = Arc<RwLock<std::collections::BTreeMap<String, Bytes>>>;
+pub struct CacheStore {
+    store: RwLock<std::collections::BTreeMap<String, Bytes>>,
+}
 
-pub fn new_store() -> CacheStore {
-    Arc::new(RwLock::new(std::collections::BTreeMap::new()))
+impl CacheStore {
+    pub fn new() -> Arc<CacheStore> {
+        Arc::new(CacheStore {
+            store: RwLock::new(std::collections::BTreeMap::new()),
+        })
+    }
+
+    pub async fn get(&self, uri: &str) -> Option<Bytes> {
+        let rstore = self.store.read().await;
+        rstore.get(uri).map(Bytes::clone)
+    }
+
+    pub async fn insert(&self, uri: String, content: Bytes) {
+        self.store.write().await.insert(uri, content);
+    }
 }
 
 pub struct FanoutBody<T: Body + Unpin> {
     pub body: T,
     pub uri: String,
     pub buffer: Vec<u8>,
-    pub cachestore: CacheStore,
+    pub cachestore: Arc<CacheStore>,
 }
 
 impl<T: Body + Unpin> FanoutBody<T> {
@@ -44,7 +59,7 @@ impl<T: Body + Unpin> FanoutBody<T> {
             #[cfg(feature = "log")]
             eprintln!("cached {} using {} B", uri, content.len());
 
-            cachestore.write().await.insert(uri, content.into());
+            cachestore.insert(uri, content.into()).await;
         });
     }
 }
@@ -95,7 +110,7 @@ mod tests {
     async fn cache_static() {
         let inp =
             Full::new(Bytes::from_static(b"you wouldn't download a fox")).map_err(|e| match e {});
-        let cachestore = new_store();
+        let cachestore = CacheStore::new();
         let body = FanoutBody {
             body: inp,
             uri: "/test".to_string(),
@@ -118,8 +133,7 @@ mod tests {
 
         // wait for FanoutBody to finish caching in the background
         tokio::task::yield_now().await;
-        let res = cachestore.read().await;
-        let res = res.get("/test").unwrap();
+        let res = cachestore.get("/test").await.unwrap();
         assert_eq!(res, &Bytes::from_static(b"you wouldn't download a fox"));
 
         match pinned.as_mut().poll_frame(&mut cx) {
@@ -129,8 +143,7 @@ mod tests {
 
         // make sure extra polling does not mess up the cache
         tokio::task::yield_now().await;
-        let res = cachestore.read().await;
-        let res = res.get("/test").unwrap();
+        let res = cachestore.get("/test").await.unwrap();
         assert_eq!(res, &Bytes::from_static(b"you wouldn't download a fox"));
     }
 }
