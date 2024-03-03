@@ -55,9 +55,13 @@ async fn handle_conn(
 
     if seen {
         if let Some(data) = cachestore.get(uri).await {
-            return Ok(Response::new(
-                Full::new(data).map_err(|e| match e {}).boxed(),
-            ));
+            let res = Response::builder().header("Accept-Ranges", "bytes");
+
+            if let Some(range) = req.headers().get("Range") {
+                return ranges::ranged_response(res, data, range);
+            }
+
+            return res.body(Full::new(data).map_err(|e| match e {}).boxed());
         }
     }
 

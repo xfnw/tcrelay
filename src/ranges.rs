@@ -1,4 +1,5 @@
-use hyper::header::HeaderValue;
+use http_body_util::{combinators::BoxBody, BodyExt, Full};
+use hyper::{body::Bytes, header::HeaderValue, Response};
 use std::ops::RangeInclusive;
 
 /// read the value of an HTTP Range header and parse into a range
@@ -36,4 +37,22 @@ pub fn parse(range: &HeaderValue, len: usize) -> Option<RangeInclusive<usize>> {
     }
 
     Some(left..=right.unwrap_or(len - 1))
+}
+
+fn not_satisfiable() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
+    Response::builder()
+        .status(hyper::StatusCode::RANGE_NOT_SATISFIABLE)
+        .body(
+            Full::new(Bytes::from_static(b"U WOT M8\n"))
+                .map_err(|e| match e {})
+                .boxed(),
+        )
+}
+
+pub fn ranged_response(
+    res: http::response::Builder,
+    data: Bytes,
+    range: &HeaderValue,
+) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
+    not_satisfiable()
 }
