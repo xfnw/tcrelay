@@ -7,6 +7,10 @@ use std::{cmp::min, ops::RangeInclusive};
 /// will not return an empty or out of bounds range, should be
 /// fine to pass to Bytes.slice after unwrapping
 pub fn parse(range: &HeaderValue, len: usize) -> Option<RangeInclusive<usize>> {
+    if len == 0 {
+        return None;
+    }
+
     let range = range.as_ref();
 
     if !range.starts_with(b"bytes=") {
@@ -78,4 +82,72 @@ pub fn ranged_response(
     let data = data.slice(range);
 
     res.body(Full::new(data).map_err(|e| match e {}).boxed())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ranges::*;
+    use hyper::body::Body;
+
+    macro_rules! assert_parse {
+        ($inp:expr, $len:expr, $expect:expr) => {
+            assert_eq!(parse(&HeaderValue::from_static($inp), $len), $expect);
+        };
+        ($(($inp:expr, $len:expr, $expect:expr)),*) => {$(
+            assert_parse!($inp, $len, Some($expect));
+        )*};
+        ($(($inp:expr, $len:expr)),*) => {$(
+            assert_parse!($inp, $len, None);
+        )*};
+    }
+
+    #[test]
+    fn valid_ranges() {
+        assert_parse!(
+            ("bytes=0-0", 1, 0..=0),
+            ("bytes=0-", 43, 0..=42),
+            ("bytes=5-9", 10, 5..=9),
+            ("bytes=5-10", 10, 5..=9),
+            ("bytes=5-90", 10, 5..=9),
+            ("bytes=5-90, 4-5", 10, 5..=9),
+            ("bytes=5-90 ", 10, 5..=9),
+            ("bytes=555555-", 1000000, 555555..=999999)
+        );
+    }
+
+    #[test]
+    fn invalid_ranges() {
+        assert_parse!(
+            ("bytes=0-0", 0),
+            ("bytes=69-", 42),
+            ("bytes=69-420", 31),
+            ("bytes=420-69", 621),
+            ("bytes=3-3.14", 3621),
+            ("boots=5-9", 10),
+            ("bytes==5-9", 10)
+        );
+    }
+
+    #[test]
+    fn valid_request() {
+        let range = HeaderValue::from_static("bytes=3-5");
+        let data = Bytes::from_static(b"beep boop");
+        let res = Response::builder().header("Accept-Ranges", "bytes");
+        let res = ranged_response(res, data, &range).unwrap();
+        assert_eq!(res.status(), 206);
+        assert_eq!(
+            res.headers().get("Content-Range"),
+            Some(&HeaderValue::from_static("3-5/9"))
+        );
+        assert_eq!(res.body().size_hint().exact(), Some(3));
+    }
+
+    #[test]
+    fn invalid_request() {
+        let range = HeaderValue::from_static("bytes=meow");
+        let data = Bytes::from_static(b"beep boop");
+        let res = Response::builder().header("Accept-Ranges", "bytes");
+        let res = ranged_response(res, data, &range);
+        assert_eq!(res.unwrap().status(), 416);
+    }
 }
