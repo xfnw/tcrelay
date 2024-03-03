@@ -1,1 +1,1 @@
-{"author":{"id":"74515061d9c62bd1750a1455b6b6e5b33c763d2ad3122f8115cf56b631c9a111"},"ops":[{"type":5,"timestamp":1708961447,"nonce":"0PLXHJDbGpPOBFB8FTU0KeCo62M=","added":null,"removed":["feature"]}]}
+{"author":{"id":"74515061d9c62bd1750a1455b6b6e5b33c763d2ad3122f8115cf56b631c9a111"},"ops":[{"type":3,"timestamp":1709486461,"nonce":"wYeAecN6NAHHl5whvfE9sRtVG8U=","message":"implemented support for single-part byte ranges on already cached pages as of r32.19ab217\n\nstill not sure how we should handle ranges on pages not yet cached","files":null}]}
