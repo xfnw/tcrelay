@@ -1,11 +1,11 @@
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::{body::Bytes, header::HeaderValue, Response};
-use std::ops::RangeInclusive;
+use std::{cmp::min, ops::RangeInclusive};
 
 /// read the value of an HTTP Range header and parse into a range
 ///
-/// len is only needed for a default value when right side of
-/// range is unspecified, this function does not check bounds
+/// will not return an empty or out of bounds range, should be
+/// fine to pass to Bytes.slice after unwrapping
 pub fn parse(range: &HeaderValue, len: usize) -> Option<RangeInclusive<usize>> {
     let range = range.as_ref();
 
@@ -36,7 +36,15 @@ pub fn parse(range: &HeaderValue, len: usize) -> Option<RangeInclusive<usize>> {
         right = Some(right.unwrap_or(0) * 10 + (c - b'0') as usize);
     }
 
-    Some(left..=right.unwrap_or(len - 1))
+    // http ranges are inclusive
+    let len = len - 1;
+
+    let right = min(right.unwrap_or(len), len);
+    if left > right {
+        return None;
+    }
+
+    Some(left..=right)
 }
 
 fn not_satisfiable() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
@@ -54,5 +62,20 @@ pub fn ranged_response(
     data: Bytes,
     range: &HeaderValue,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
-    not_satisfiable()
+    let olength = data.len();
+
+    let range = match parse(range, olength) {
+        Some(r) => r,
+        None => return not_satisfiable(),
+    };
+
+    let res = res
+        .header(
+            "Content-Range",
+            format!("{}-{}/{}", range.start(), range.end(), olength),
+        )
+        .status(hyper::StatusCode::PARTIAL_CONTENT);
+    let data = data.slice(range);
+
+    res.body(Full::new(data).map_err(|e| match e {}).boxed())
 }
