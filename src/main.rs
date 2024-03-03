@@ -8,6 +8,7 @@ use tokio::{net::TcpListener, sync::RwLock};
 pub mod bloom;
 pub mod cache;
 pub mod hclient;
+pub mod ranges;
 
 #[derive(Debug, Parser)]
 struct Opt {
