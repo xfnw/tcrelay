@@ -63,20 +63,17 @@ async fn handle_conn(
     match hclient::try_get(&mirrors, uri).await {
         Some(data) => {
             let obody = data.into_body();
-            let body = match seen {
-                true => {
-                    let sbody = cache::FanoutBody {
-                        body: obody,
-                        uri: uri.to_string(),
-                        buffer: Vec::new(),
-                        cachestore,
-                    };
-                    sbody.boxed()
-                }
-                false => {
-                    bloom::add(&mut *filter.write().await, uri_bytes);
-                    obody.boxed()
-                }
+            let body = if seen {
+                let sbody = cache::FanoutBody {
+                    body: obody,
+                    uri: uri.to_string(),
+                    buffer: Vec::new(),
+                    cachestore,
+                };
+                sbody.boxed()
+            } else {
+                bloom::add(&mut *filter.write().await, uri_bytes);
+                obody.boxed()
             };
 
             Ok(Response::new(body))
