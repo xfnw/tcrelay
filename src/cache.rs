@@ -134,12 +134,16 @@ mod tests {
         let mut cx = std::task::Context::from_waker(waker);
         let mut pinned = std::pin::pin!(body);
 
+        assert_eq!(pinned.size_hint().exact(), Some(27));
+
         let pf = pinned.as_mut().poll_frame(&mut cx);
         let read = match pf {
             Poll::Ready(Some(Ok(ref frame))) => frame.data_ref().unwrap(),
             e => panic!("failed to poll frame: {:?}", e),
         };
         assert_eq!(read, &Bytes::from_static(b"you wouldn't download a fox"));
+
+        assert_eq!(pinned.size_hint().exact(), Some(0));
 
         // wait for FanoutBody to finish caching in the background
         tokio::task::yield_now().await;

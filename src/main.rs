@@ -137,6 +137,7 @@ mod tests {
     #[tokio::test]
     async fn no_mirrors() {
         use http_body_util::Empty;
+        use hyper::body::Body;
 
         let mirrors = Arc::new(vec![]);
         let filter = Arc::new(RwLock::new([0_u8; 8192]));
@@ -148,6 +149,8 @@ mod tests {
             .unwrap();
 
         let res = handle_conn(req, mirrors, filter, cachestore).await.unwrap();
+
+        assert_eq!(res.body().size_hint().exact(), Some(11));
 
         // FIXME: comparing Debug is probably a bad idea,
         // but BoxBody does not implement Eq, so...
