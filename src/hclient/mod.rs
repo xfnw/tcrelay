@@ -3,6 +3,8 @@ use hyper::{body::Bytes, Request, Response};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
 
+mod tls_configs;
+
 pub async fn try_get(mirrors: &[String], path: &str) -> Option<Response<hyper::body::Incoming>> {
     for m in mirrors {
         let url = format!("{}{}", m, path);
