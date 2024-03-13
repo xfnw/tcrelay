@@ -1,9 +1,17 @@
 use http_body_util::Empty;
-use hyper::{body::Bytes, Request, Response};
+use hyper::{body::Bytes, Request, Response, Uri};
 use hyper_util::rt::TokioIo;
-use tokio::net::TcpStream;
+use std::sync::Arc;
+use tokio::{io, net::TcpStream};
+use tokio_rustls::{rustls::pki_types, TlsConnector};
 
 mod tls_configs;
+
+pub enum SupportedScheme {
+    Https,
+    HttpsInsecure,
+    Http,
+}
 
 pub async fn try_get(mirrors: &[String], path: &str) -> Option<Response<hyper::body::Incoming>> {
     for m in mirrors {
@@ -39,13 +47,49 @@ pub async fn try_get(mirrors: &[String], path: &str) -> Option<Response<hyper::b
 }
 
 pub async fn get_request(
-    uri: hyper::Uri,
+    uri: Uri,
 ) -> Result<Response<hyper::body::Incoming>, Box<dyn std::error::Error + Send + Sync>> {
+    use SupportedScheme::*;
+
+    let scheme = match uri.scheme_str() {
+        Some("https") => Https,
+        Some("https+insecure") => HttpsInsecure,
+        Some("http") | None => Http,
+        Some(_) => return Err("unsupported scheme".into()),
+    };
+
     let h = uri.host().ok_or("mangled host")?;
-    let p = uri.port_u16().unwrap_or(80);
+    let p = uri.port_u16().unwrap_or(match scheme {
+        Https | HttpsInsecure => 443,
+        Http => 80,
+    });
     let addr = format!("{}:{}", h, p);
 
     let stream = TcpStream::connect(addr).await?;
+
+    match scheme {
+        Https => {
+            let connector = TlsConnector::from(Arc::clone(&*tls_configs::CONF));
+            let domain = pki_types::ServerName::try_from(h)?.to_owned();
+            let stream = connector.connect(domain, stream).await?;
+
+            get_with_stream(stream, uri).await
+        }
+        HttpsInsecure => {
+            let connector = TlsConnector::from(Arc::clone(&*tls_configs::CONF_INSECURE));
+            let domain = pki_types::ServerName::try_from(h)?.to_owned();
+            let stream = connector.connect(domain, stream).await?;
+
+            get_with_stream(stream, uri).await
+        }
+        Http => get_with_stream(stream, uri).await,
+    }
+}
+
+async fn get_with_stream<T: io::AsyncRead + io::AsyncWrite + Send + Unpin + 'static>(
+    stream: T,
+    uri: Uri,
+) -> Result<Response<hyper::body::Incoming>, Box<dyn std::error::Error + Send + Sync>> {
     let io = TokioIo::new(stream);
     let (mut sender, conn) = hyper::client::conn::http1::handshake(io).await?;
 
@@ -60,6 +104,7 @@ pub async fn get_request(
         .authority()
         .expect("got host but not authority? what")
         .as_str();
+
     let req = Request::builder()
         .uri(uri.path())
         .header(hyper::header::HOST, addr)
