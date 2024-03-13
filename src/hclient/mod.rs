@@ -100,10 +100,7 @@ async fn get_with_stream<T: io::AsyncRead + io::AsyncWrite + Send + Unpin + 'sta
         }
     });
 
-    let addr = uri
-        .authority()
-        .expect("got host but not authority? what")
-        .as_str();
+    let addr = uri.authority().expect("failed to parse authority").as_str();
 
     let req = Request::builder()
         .uri(uri.path())
@@ -123,6 +120,23 @@ mod tests {
         let url = "http://tinycorelinux.net/10.x/x86/tcz/mirrors.tcz.md5.txt";
         let res = get_request(url.parse().unwrap()).await.unwrap();
         assert!(res.status().is_success());
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn get_https() {
+        let url = "https://mozilla-modern.badssl.com/";
+        let res = get_request(url.parse().unwrap()).await.unwrap();
+        assert!(res.status().is_success());
+
+        let url = "https+insecure://self-signed.badssl.com/";
+        let res = get_request(url.parse().unwrap()).await.unwrap();
+        assert!(res.status().is_success());
+
+        let url = "https://mitm-software.badssl.com:443/";
+        // would be better to check the error kind specifically for
+        // InvalidCertificate(UnknownIssuer), but it is boxed :(
+        get_request(url.parse().unwrap()).await.unwrap_err();
     }
 
     #[tokio::test]
