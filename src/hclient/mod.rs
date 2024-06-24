@@ -13,8 +13,11 @@ pub enum SupportedScheme {
     Http,
 }
 
-pub async fn try_get(mirrors: &[String], path: &str) -> Option<Response<hyper::body::Incoming>> {
-    for m in mirrors {
+pub async fn try_get(
+    mirrors: &[String],
+    path: &str,
+) -> Option<(Response<hyper::body::Incoming>, usize)> {
+    for (i, m) in mirrors.iter().enumerate() {
         let url = format!("{}{}", m, path);
         let uri = match url.parse() {
             Ok(u) => u,
@@ -34,7 +37,7 @@ pub async fn try_get(mirrors: &[String], path: &str) -> Option<Response<hyper::b
 
                 #[cfg(feature = "log")]
                 eprintln!("got {}", url);
-                return Some(r);
+                return Some((r, i));
             }
             Err(_e) => {
                 #[cfg(feature = "log")]
@@ -152,6 +155,6 @@ mod tests {
         let res = try_get(&mirrors, "/10.x/x86/tcz/sed.tcz.md5.txt")
             .await
             .unwrap();
-        assert_eq!(res.headers().get("content-length").unwrap(), "42");
+        assert_eq!(res.0.headers().get("content-length").unwrap(), "42");
     }
 }

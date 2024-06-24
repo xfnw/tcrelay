@@ -15,6 +15,9 @@ struct Opt {
     #[arg(short, env = "BIND", default_value = "[::]:8060")]
     bindhost: SocketAddr,
 
+    #[arg(short, default_value = "0")]
+    skip: usize,
+
     /// urls to check for a package, in order of precedence
     #[arg(required = true)]
     mirrors: Vec<String>,
@@ -35,6 +38,7 @@ async fn handle_conn(
     mirrors: Arc<Vec<String>>,
     filter: Arc<RwLock<[u8; 8192]>>,
     cachestore: Arc<cache::CacheStore>,
+    skip: usize,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
     let uri = req.uri().path();
 
@@ -66,9 +70,9 @@ async fn handle_conn(
     }
 
     match hclient::try_get(&mirrors, uri).await {
-        Some(data) => {
+        Some((data, mindex)) => {
             let obody = data.into_body();
-            let body = if seen {
+            let body = if seen && mindex >= skip {
                 let sbody = cache::FanoutBody {
                     body: obody,
                     uri: uri.to_string(),
@@ -113,6 +117,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 Arc::clone(&mirrors),
                 Arc::clone(&filter),
                 Arc::clone(&cachestore),
+                opt.skip,
             )
         });
 
@@ -148,7 +153,9 @@ mod tests {
             .body(Empty::<Bytes>::new())
             .unwrap();
 
-        let res = handle_conn(req, mirrors, filter, cachestore).await.unwrap();
+        let res = handle_conn(req, mirrors, filter, cachestore, 0)
+            .await
+            .unwrap();
 
         assert_eq!(res.body().size_hint().exact(), Some(11));
 
