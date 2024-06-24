@@ -23,7 +23,7 @@ impl CacheStore {
 
     pub async fn get(&self, uri: &str) -> Option<Bytes> {
         let rstore = self.store.read().await;
-        rstore.get(uri).map(Bytes::clone)
+        rstore.get(uri).cloned()
     }
 
     pub async fn insert(&self, uri: String, content: Bytes) {
