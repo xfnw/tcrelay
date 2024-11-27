@@ -8,6 +8,7 @@ use tokio::{net::TcpListener, sync::RwLock};
 pub mod bloom;
 pub mod cache;
 pub mod hclient;
+pub mod metrics;
 pub mod ranges;
 
 #[derive(Debug, Parser)]
@@ -38,11 +39,14 @@ async fn handle_conn(
     mirrors: Arc<Vec<String>>,
     filter: Arc<RwLock<[u8; 8192]>>,
     cachestore: Arc<cache::CacheStore>,
+    metrics: Arc<metrics::Metrics>,
     skip: usize,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
     let uri = req.uri().path();
+    metrics.trace_request();
 
     if req.method() == hyper::Method::DELETE {
+        metrics.trace_delete();
         return if cachestore.remove(uri).await.is_some() {
             Ok(Response::new(
                 Full::new(Bytes::from_static(b"nom nom\n"))
@@ -54,12 +58,17 @@ async fn handle_conn(
         };
     }
 
+    if uri == "/_tcrelay/metrics" {
+        return Ok(metrics.response());
+    }
+
     let uri_bytes = uri.as_bytes();
     let seen = bloom::check(&*filter.read().await, uri_bytes);
 
     if seen {
         if let Some(data) = cachestore.get(uri).await {
             let res = Response::builder().header("Accept-Ranges", "bytes");
+            metrics.trace_hit();
 
             if let Some(range) = req.headers().get("Range") {
                 return ranges::ranged_response(res, data, range);
@@ -71,8 +80,10 @@ async fn handle_conn(
 
     match hclient::try_get(&mirrors, uri).await {
         Some((data, mindex)) => {
+            metrics.trace_miss();
             let obody = data.into_body();
             let body = if seen && mindex >= skip {
+                metrics.trace_cache();
                 let sbody = cache::FanoutBody {
                     body: obody,
                     uri: uri.to_string(),
@@ -87,7 +98,10 @@ async fn handle_conn(
 
             Ok(Response::new(body))
         }
-        None => not_found(),
+        None => {
+            metrics.trace_404();
+            not_found()
+        }
     }
 }
 
@@ -102,6 +116,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mirrors = Arc::new(opt.mirrors);
     let filter = Arc::new(RwLock::new([0_u8; 8192]));
     let cachestore = cache::CacheStore::new();
+    let metrics = metrics::Metrics::new();
 
     loop {
         let (stream, _) = listen.accept().await?;
@@ -110,6 +125,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         let mirrors = Arc::clone(&mirrors);
         let filter = Arc::clone(&filter);
         let cachestore = Arc::clone(&cachestore);
+        let metrics = Arc::clone(&metrics);
 
         let service = service_fn(move |req| {
             handle_conn(
@@ -117,6 +133,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 Arc::clone(&mirrors),
                 Arc::clone(&filter),
                 Arc::clone(&cachestore),
+                Arc::clone(&metrics),
                 opt.skip,
             )
         });
@@ -147,13 +164,14 @@ mod tests {
         let mirrors = Arc::new(vec![]);
         let filter = Arc::new(RwLock::new([0_u8; 8192]));
         let cachestore = cache::CacheStore::new();
+        let metrics = metrics::Metrics::new();
 
         let req = Request::builder()
             .uri("/meow")
             .body(Empty::<Bytes>::new())
             .unwrap();
 
-        let res = handle_conn(req, mirrors, filter, cachestore, 0)
+        let res = handle_conn(req, mirrors, filter, cachestore, metrics, 0)
             .await
             .unwrap();
 
