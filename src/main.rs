@@ -55,7 +55,7 @@ async fn handle_conn(
     }
 
     let uri_bytes = uri.as_bytes();
-    let seen = bloom::check(&*filter.read().await, uri.as_bytes());
+    let seen = bloom::check(&*filter.read().await, uri_bytes);
 
     if seen {
         if let Some(data) = cachestore.get(uri).await {
