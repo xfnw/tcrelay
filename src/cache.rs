@@ -34,7 +34,8 @@ impl CacheStore {
     }
 
     pub async fn remove(&self, uri: &str) -> Option<Bytes> {
-        if let Some(content) = self.store.write().await.remove(uri) {
+        let removed = self.store.write().await.remove(uri);
+        if let Some(content) = removed {
             #[cfg(feature = "log")]
             eprintln!("removed {} freeing {} B", uri, content.len());
 
