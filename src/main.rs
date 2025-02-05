@@ -78,30 +78,27 @@ async fn handle_conn(
         }
     }
 
-    match hclient::try_get(&mirrors, uri).await {
-        Some((data, mindex)) => {
-            metrics.trace_miss();
-            let obody = data.into_body();
-            let body = if seen && mindex >= skip {
-                metrics.trace_cache();
-                let sbody = cache::FanoutBody {
-                    body: obody,
-                    uri: uri.to_string(),
-                    buffer: Vec::new(),
-                    cachestore,
-                };
-                sbody.boxed()
-            } else {
-                bloom::add(&mut *filter.write().await, uri_bytes);
-                obody.boxed()
+    if let Some((data, mindex)) = hclient::try_get(&mirrors, uri).await {
+        metrics.trace_miss();
+        let obody = data.into_body();
+        let body = if seen && mindex >= skip {
+            metrics.trace_cache();
+            let sbody = cache::FanoutBody {
+                body: obody,
+                uri: uri.to_string(),
+                buffer: Vec::new(),
+                cachestore,
             };
+            sbody.boxed()
+        } else {
+            bloom::add(&mut *filter.write().await, uri_bytes);
+            obody.boxed()
+        };
 
-            Ok(Response::new(body))
-        }
-        None => {
-            metrics.trace_404();
-            not_found()
-        }
+        Ok(Response::new(body))
+    } else {
+        metrics.trace_404();
+        not_found()
     }
 }
 

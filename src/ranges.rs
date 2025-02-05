@@ -68,9 +68,8 @@ pub fn ranged_response(
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
     let olength = data.len();
 
-    let range = match parse(range, olength) {
-        Some(r) => r,
-        None => return not_satisfiable(),
+    let Some(range) = parse(range, olength) else {
+        return not_satisfiable();
     };
 
     let res = res
