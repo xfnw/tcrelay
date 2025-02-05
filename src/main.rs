@@ -137,7 +137,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
         tokio::task::spawn(async move {
             if let Err(e) = http1::Builder::new().serve_connection(io, service).await {
-                eprintln!("oh no {:?}", e);
+                eprintln!("oh no {e:?}");
             }
         });
     }
@@ -176,7 +176,7 @@ mod tests {
 
         // FIXME: comparing Debug is probably a bad idea,
         // but BoxBody does not implement Eq, so...
-        let res = format!("{:?}", res);
+        let res = format!("{res:?}");
         assert_eq!(res, format!("{:?}", not_found().unwrap()));
     }
 }

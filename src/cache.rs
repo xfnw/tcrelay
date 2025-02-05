@@ -140,7 +140,7 @@ mod tests {
         let pf = pinned.as_mut().poll_frame(&mut cx);
         let read = match pf {
             Poll::Ready(Some(Ok(ref frame))) => frame.data_ref().unwrap(),
-            e => panic!("failed to poll frame: {:?}", e),
+            e => panic!("failed to poll frame: {e:?}"),
         };
         assert_eq!(read, &Bytes::from_static(b"you wouldn't download a fox"));
 
@@ -153,7 +153,7 @@ mod tests {
 
         match pinned.as_mut().poll_frame(&mut cx) {
             Poll::Ready(None) => (),
-            e => panic!("failed to poll frame: {:?}", e),
+            e => panic!("failed to poll frame: {e:?}"),
         };
 
         // make sure extra polling does not mess up the cache

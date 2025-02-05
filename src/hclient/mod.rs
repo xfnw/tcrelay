@@ -18,7 +18,7 @@ pub async fn try_get(
     path: &str,
 ) -> Option<(Response<hyper::body::Incoming>, usize)> {
     for (i, m) in mirrors.iter().enumerate() {
-        let url = format!("{}{}", m, path);
+        let url = format!("{m}{path}");
         let uri = match url.parse() {
             Ok(u) => u,
             Err(_e) => {
@@ -66,7 +66,7 @@ pub async fn get_request(
         Https | HttpsInsecure => 443,
         Http => 80,
     });
-    let addr = format!("{}:{}", h, p);
+    let addr = format!("{h}:{p}");
 
     let stream = TcpStream::connect(addr).await?;
 
