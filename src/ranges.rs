@@ -63,7 +63,7 @@ fn not_satisfiable() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::ht
 
 pub fn ranged_response(
     res: http::response::Builder,
-    data: Bytes,
+    data: &Bytes,
     range: &HeaderValue,
 ) -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Error> {
     let olength = data.len();
@@ -132,7 +132,7 @@ mod tests {
         let range = HeaderValue::from_static("bytes=3-5");
         let data = Bytes::from_static(b"beep boop");
         let res = Response::builder().header("Accept-Ranges", "bytes");
-        let res = ranged_response(res, data, &range).unwrap();
+        let res = ranged_response(res, &data, &range).unwrap();
         assert_eq!(res.status(), 206);
         assert_eq!(
             res.headers().get("Content-Range"),
@@ -146,7 +146,7 @@ mod tests {
         let range = HeaderValue::from_static("bytes=meow");
         let data = Bytes::from_static(b"beep boop");
         let res = Response::builder().header("Accept-Ranges", "bytes");
-        let res = ranged_response(res, data, &range);
+        let res = ranged_response(res, &data, &range);
         assert_eq!(res.unwrap().status(), 416);
     }
 }

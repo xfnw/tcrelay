@@ -71,7 +71,7 @@ async fn handle_conn(
             metrics.trace_hit();
 
             if let Some(range) = req.headers().get("Range") {
-                return ranges::ranged_response(res, data, range);
+                return ranges::ranged_response(res, &data, range);
             }
 
             return res.body(Full::new(data).map_err(|e| match e {}).boxed());
