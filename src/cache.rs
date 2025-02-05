@@ -90,7 +90,7 @@ impl<T: Body<Data = Bytes, Error = Error> + Unpin> Body for FanoutBody<T> {
                     self.buffer.append(&mut data.to_vec());
                 }
                 if self.is_end_stream() {
-                    self.done()
+                    self.done();
                 }
             }
             Poll::Ready(None) => self.done(),
