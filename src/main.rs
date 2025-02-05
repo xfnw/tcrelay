@@ -35,7 +35,7 @@ fn not_found() -> Result<Response<BoxBody<Bytes, hyper::Error>>, hyper::http::Er
 }
 
 async fn handle_conn(
-    req: Request<impl hyper::body::Body>,
+    req: Request<impl hyper::body::Body + Send>,
     mirrors: Arc<Vec<String>>,
     filter: Arc<RwLock<[u8; 8192]>>,
     cachestore: Arc<cache::CacheStore>,
