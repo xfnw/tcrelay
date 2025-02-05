@@ -2,7 +2,7 @@ pub fn hash(state: u16, data: &[u8]) -> u16 {
     let mut state = state;
 
     for c in data {
-        let mut x: u16 = state >> 8 ^ *c as u16;
+        let mut x: u16 = state >> 8 ^ u16::from(*c);
         x ^= x >> 4;
         state = state << 8 ^ x << 12 ^ x << 5 ^ x;
     }
