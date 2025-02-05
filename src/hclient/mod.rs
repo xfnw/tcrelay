@@ -7,7 +7,7 @@ use tokio_rustls::{rustls::pki_types, TlsConnector};
 
 mod tls_configs;
 
-pub enum SupportedScheme {
+pub enum Scheme {
     Https,
     HttpsInsecure,
     Http,
@@ -52,40 +52,38 @@ pub async fn try_get(
 pub async fn get_request(
     uri: Uri,
 ) -> Result<Response<hyper::body::Incoming>, Box<dyn std::error::Error + Send + Sync>> {
-    use SupportedScheme::*;
-
     let scheme = match uri.scheme_str() {
-        Some("https") => Https,
-        Some("https+insecure") => HttpsInsecure,
-        Some("http") | None => Http,
+        Some("https") => Scheme::Https,
+        Some("https+insecure") => Scheme::HttpsInsecure,
+        Some("http") | None => Scheme::Http,
         Some(_) => return Err("unsupported scheme".into()),
     };
 
     let h = uri.host().ok_or("mangled host")?;
     let p = uri.port_u16().unwrap_or(match scheme {
-        Https | HttpsInsecure => 443,
-        Http => 80,
+        Scheme::Https | Scheme::HttpsInsecure => 443,
+        Scheme::Http => 80,
     });
     let addr = format!("{h}:{p}");
 
     let stream = TcpStream::connect(addr).await?;
 
     match scheme {
-        Https => {
+        Scheme::Https => {
             let connector = TlsConnector::from(Arc::clone(&*tls_configs::CONF));
             let domain = pki_types::ServerName::try_from(h)?.to_owned();
             let stream = connector.connect(domain, stream).await?;
 
             get_with_stream(stream, uri).await
         }
-        HttpsInsecure => {
+        Scheme::HttpsInsecure => {
             let connector = TlsConnector::from(Arc::clone(&*tls_configs::CONF_INSECURE));
             let domain = pki_types::ServerName::try_from(h)?.to_owned();
             let stream = connector.connect(domain, stream).await?;
 
             get_with_stream(stream, uri).await
         }
-        Http => get_with_stream(stream, uri).await,
+        Scheme::Http => get_with_stream(stream, uri).await,
     }
 }
 
