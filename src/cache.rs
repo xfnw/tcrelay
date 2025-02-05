@@ -15,8 +15,8 @@ pub struct CacheStore {
 }
 
 impl CacheStore {
-    pub fn new() -> Arc<CacheStore> {
-        Arc::new(CacheStore {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
             store: RwLock::new(std::collections::BTreeMap::new()),
         })
     }

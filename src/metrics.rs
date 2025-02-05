@@ -28,8 +28,8 @@ macro_rules! trace_functions {
 }
 
 impl Metrics {
-    pub fn new() -> Arc<Metrics> {
-        Arc::new(Metrics::default())
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
     }
 
     pub fn output(&self) -> String {
