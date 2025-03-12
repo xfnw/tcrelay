@@ -1,3 +1,4 @@
+#[allow(clippy::precedence)]
 pub fn hash(state: u16, data: &[u8]) -> u16 {
     let mut state = state;
 
