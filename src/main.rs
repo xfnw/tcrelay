@@ -47,7 +47,7 @@ async fn handle_conn(
 
     if req.method() == hyper::Method::DELETE {
         metrics.trace_delete();
-        return if cachestore.remove(uri).await.is_some() {
+        return if cachestore.remove(uri).is_some() {
             Ok(Response::new(
                 Full::new(Bytes::from_static(b"nom nom\n"))
                     .map_err(|e| match e {})
@@ -66,7 +66,7 @@ async fn handle_conn(
     let seen = bloom::check(&*filter.read().await, uri_bytes);
 
     if seen {
-        if let Some(data) = cachestore.get(uri).await {
+        if let Some(data) = cachestore.get(uri) {
             let res = Response::builder().header("Accept-Ranges", "bytes");
             metrics.trace_hit();
 

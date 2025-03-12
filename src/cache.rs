@@ -2,13 +2,13 @@ use hyper::{
     body::{Body, Bytes, Frame, SizeHint},
     Error,
 };
+use parking_lot::RwLock;
 use std::{
     marker::Unpin,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
 };
-use tokio::{runtime::Handle, sync::RwLock};
 
 pub struct CacheStore {
     store: RwLock<std::collections::BTreeMap<String, Bytes>>,
@@ -21,20 +21,19 @@ impl CacheStore {
         })
     }
 
-    pub async fn get(&self, uri: &str) -> Option<Bytes> {
-        let rstore = self.store.read().await;
-        rstore.get(uri).cloned()
+    pub fn get(&self, uri: &str) -> Option<Bytes> {
+        self.store.read().get(uri).cloned()
     }
 
-    pub async fn insert(&self, uri: String, content: Bytes) {
+    pub fn insert(&self, uri: String, content: Bytes) {
         #[cfg(feature = "log")]
         eprintln!("cached {} using {} B", uri, content.len());
 
-        self.store.write().await.insert(uri, content);
+        self.store.write().insert(uri, content);
     }
 
-    pub async fn remove(&self, uri: &str) -> Option<Bytes> {
-        let removed = self.store.write().await.remove(uri);
+    pub fn remove(&self, uri: &str) -> Option<Bytes> {
+        let removed = self.store.write().remove(uri);
         if let Some(content) = removed {
             #[cfg(feature = "log")]
             eprintln!("removed {} freeing {} B", uri, content.len());
@@ -66,12 +65,7 @@ impl<T: Body + Unpin> FanoutBody<T> {
         let mut content = Vec::new();
         content.append(&mut self.buffer);
 
-        // Body trait does not allow us to be an async function,
-        // nab the runtime and become one anyways >:3
-        let _ = Handle::current().enter();
-        tokio::task::spawn(async move {
-            cachestore.insert(uri, content.into()).await;
-        });
+        cachestore.insert(uri, content.into());
     }
 }
 
@@ -148,7 +142,7 @@ mod tests {
 
         // wait for FanoutBody to finish caching in the background
         tokio::task::yield_now().await;
-        let res = cachestore.get("/test").await.unwrap();
+        let res = cachestore.get("/test").unwrap();
         assert_eq!(res, Bytes::from_static(b"you wouldn't download a fox"));
 
         match pinned.as_mut().poll_frame(&mut cx) {
@@ -158,10 +152,10 @@ mod tests {
 
         // make sure extra polling does not mess up the cache
         tokio::task::yield_now().await;
-        let res = cachestore.get("/test").await.unwrap();
+        let res = cachestore.get("/test").unwrap();
         assert_eq!(res, Bytes::from_static(b"you wouldn't download a fox"));
 
-        let res = cachestore.remove("/test").await.unwrap();
+        let res = cachestore.remove("/test").unwrap();
         assert_eq!(res, Bytes::from_static(b"you wouldn't download a fox"));
     }
 }
