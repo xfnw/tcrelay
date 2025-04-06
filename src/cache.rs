@@ -62,8 +62,7 @@ impl<T: Body + Unpin> FanoutBody<T> {
 
         // we cannot take the buffer since self is pinned,
         // consume it instead
-        let mut content = Vec::new();
-        content.append(&mut self.buffer);
+        let content = std::mem::take(&mut self.buffer);
 
         cachestore.insert(uri, content.into());
     }
