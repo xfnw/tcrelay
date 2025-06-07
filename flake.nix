@@ -13,12 +13,13 @@
       let
         pkgs = (import nixpkgs) { inherit system; };
         naersk' = pkgs.callPackage naersk { };
-      in rec {
-        packages.tcrelay = naersk'.buildPackage { src = ./.; };
+      in {
+        packages = rec {
+          tcrelay = naersk'.buildPackage { src = ./.; };
+          default = tcrelay;
+        };
 
-        defaultPackage = packages.tcrelay;
-
-        devShell = pkgs.mkShell {
+        devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [ rustc cargo clippy ];
         };
       });
